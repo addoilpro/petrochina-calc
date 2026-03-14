@@ -11,6 +11,7 @@
         .card-shadow { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1); }
         .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.9); display: flex; align-items: center; justify-content: center; z-index: 50; transition: opacity 0.3s; }
         .day-btn.active { border-color: #ef4444; background-color: #fef2f2; color: #b91c1c; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+        .fuel-btn.active { border-color: #ef4444; background-color: #fff1f2; }
         input[type="checkbox"]:checked { background-color: #ef4444; border-color: #ef4444; }
     </style>
 </head>
@@ -25,6 +26,7 @@
     </div>
 
     <div class="max-w-md mx-auto bg-white rounded-[2.5rem] overflow-hidden card-shadow border border-gray-100">
+        <!-- Header -->
         <div class="petro-gradient p-6 text-white text-center">
             <h1 class="text-xl font-black flex justify-center items-center gap-2">
                 <span class="bg-white text-red-600 rounded-lg w-8 h-8 flex items-center justify-center shadow-sm text-sm">中</span>
@@ -58,12 +60,12 @@
             <!-- 3. 選擇油品 -->
             <div class="bg-gray-50 p-3 rounded-2xl border border-gray-100">
                 <div class="grid grid-cols-2 gap-3">
-                    <button onclick="updateSelection('fuel', 'Futuro')" id="btn-super" class="border-2 rounded-xl p-2 text-center relative overflow-hidden transition-all">
+                    <button onclick="updateSelection('fuel', 'Futuro')" id="btn-super" class="fuel-btn border-2 rounded-xl p-2 text-center relative overflow-hidden transition-all">
                         <div class="font-bold text-sm" id="label-super">超級 Futuro</div>
                         <div class="text-[10px] text-gray-500" id="price-super">$32.89</div>
                         <div id="tag-upgrade" class="hidden absolute top-0 right-0 bg-yellow-400 text-red-800 text-[8px] px-1.5 py-0.5 font-bold shadow-sm">免費升級</div>
                     </button>
-                    <button onclick="updateSelection('fuel', 'VitaGold')" id="btn-regular" class="border-2 rounded-xl p-2 text-center transition-all">
+                    <button onclick="updateSelection('fuel', 'VitaGold')" id="btn-regular" class="fuel-btn border-2 rounded-xl p-2 text-center transition-all">
                         <div class="font-bold text-sm" id="label-regular">清新 VitaGold</div>
                         <div class="text-[10px] text-gray-500" id="price-regular">$31.09</div>
                     </button>
@@ -141,24 +143,24 @@
         </div>
         
         <div class="bg-gray-50 p-4 text-[9px] text-gray-400 leading-relaxed border-t border-gray-100 flex justify-between">
-            <span>* 積分換油基準：12,000分 = $200 (清新汽油 $31.09)</span>
+            <span>* 積分換油基準：12,000分 = $200 (清新汽油)</span>
             <span id="update-time">未同步</span>
         </div>
     </div>
 
     <script>
-        const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTWqLgHf9e8GyoDwCDxY15GY19TvKS0mIo4MXlaYb6pdvJrGm3wxgYsiORXX3vkgWuWjUasZ17X_Cqa/pub?gid=0&single=true&output=csv"; 
+        const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTWqLgHf9e8GyoDwCDxY15GY19TvKS0mIo4MXlaYb6pdvJrGm3wxgYsiORXX3vkgWuWjUasZ17X_Cqa/pub?gid=189785955&single=true&output=csv"; 
         
         let promoRules = []; 
         let gasPrices = { "Futuro": 32.89, "VitaGold": 31.09 }; 
-        let state = { day: new Date().getDay() || 7, fuel: 'Futuro' };
+        let state = { 
+            day: new Date().getDay() || 7, 
+            fuel: 'Futuro' 
+        };
 
         async function init() {
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 8000);
-                const response = await fetch(SHEET_CSV_URL, { signal: controller.signal });
-                clearTimeout(timeoutId);
+                const response = await fetch(SHEET_CSV_URL);
                 if (!response.ok) throw new Error("Sheet Error");
                 const csvText = await response.text();
                 processData(csvText);
@@ -167,8 +169,7 @@
             } catch (err) {
                 document.getElementById('sync-status').innerText = "連線失敗";
             } finally {
-                document.getElementById('loading').style.opacity = '0';
-                setTimeout(() => document.getElementById('loading').style.display = 'none', 300);
+                document.getElementById('loading').style.display = 'none';
                 populateStations();
                 updateSelection('day', state.day); 
             }
@@ -198,24 +199,25 @@
             lines.forEach((line, index) => {
                 if (index === 0 || !line.trim()) return; 
                 const row = parseCSVLine(line);
+                
                 if (row[1] && row[2]) {
-                    data.push({
-                        type: row[0],
-                        stationRaw: row[1].replace(/"/g, '').trim(), 
-                        days: row[2].replace(/"/g, '').trim(),
-                        fuel: (row[3] || "").toLowerCase().trim(), 
-                        discount: parseFloat(row[4]) || 0,
-                        pts: parseInt(row[5]) || 1,
-                        upgrade: parseInt(row[6]) || 0
-                    });
-                }
-                if (row[7] && row[8]) {
-                    const label = row[7].toLowerCase();
-                    const price = parseFloat(row[8]);
+                    const fuelName = row[1].toLowerCase();
+                    const price = parseFloat(row[2]);
                     if (price > 0) {
-                        if (label.includes('futuro') || label.includes('super')) gasPrices['Futuro'] = price;
-                        if (label.includes('vita') || label.includes('regular')) gasPrices['VitaGold'] = price;
+                        if (fuelName.includes('futuro')) gasPrices['Futuro'] = price;
+                        if (fuelName.includes('vitagold')) gasPrices['VitaGold'] = price;
                     }
+                }
+
+                if (row[4] && row[5]) {
+                    data.push({
+                        stationRaw: row[4].replace(/"/g, '').trim(), 
+                        days: row[5].replace(/"/g, '').trim(),
+                        fuel: (row[6] || "").toLowerCase().trim(), 
+                        discount: parseFloat(row[7]) || 0,
+                        pts: parseInt(row[9]) || 1,
+                        upgrade: (row[10] === '1' || row[10] === 1) ? 1 : 0
+                    });
                 }
             });
             if (data.length > 0) promoRules = data;
@@ -231,6 +233,7 @@
             const select = document.getElementById('station-select');
             const allStations = [];
             promoRules.forEach(rule => {
+                if (rule.stationRaw === "Station" || !rule.stationRaw) return;
                 const parts = rule.stationRaw.split(/[，,]/).map(s => s.trim());
                 parts.forEach(p => { if(p && !allStations.includes(p)) allStations.push(p); });
             });
@@ -245,11 +248,8 @@
                 document.querySelectorAll('.day-btn').forEach(btn => btn.classList.toggle('active', parseInt(btn.dataset.day) === val));
             }
             if (type === 'fuel') {
-                const isSuper = val === 'Futuro';
-                document.getElementById('btn-super').classList.toggle('active', isSuper);
-                document.getElementById('btn-super').classList.toggle('opacity-60', !isSuper);
-                document.getElementById('btn-regular').classList.toggle('active', !isSuper);
-                document.getElementById('btn-regular').classList.toggle('opacity-60', isSuper);
+                document.getElementById('btn-super').classList.toggle('active', val === 'Futuro');
+                document.getElementById('btn-regular').classList.toggle('active', val === 'VitaGold');
             }
             calculate();
         }
@@ -262,68 +262,47 @@
 
             if (!selectedStation) return;
             
-            // 找出該油站、該星期的所有相關規則
             const matchedRules = promoRules.filter(r => {
                 const stationArray = r.stationRaw.split(/[，,]/).map(s => s.trim());
                 const dayArray = r.days.toString().split(/[，,]/).map(n => n.trim());
                 return stationArray.includes(selectedStation) && dayArray.includes(state.day.toString());
             });
 
-            // 判斷該站今日是否有免費升級活動
             const hasUpgradeEnabled = matchedRules.some(r => r.upgrade === 1);
             document.getElementById('tag-upgrade').classList.toggle('hidden', !hasUpgradeEnabled);
 
             const superPrice = gasPrices['Futuro'];
             const regularPrice = gasPrices['VitaGold'];
-            const cardPrice = gasPrices[state.fuel];
+            const currentCardPrice = gasPrices[state.fuel];
 
-            // 獲取當前所選油品的對應折扣 (如果是超級油就拿超級油的行)
             const targetKey = state.fuel === 'Futuro' ? 'super' : 'regular';
-            let rule = matchedRules.find(r => r.fuel.includes(targetKey));
-            if (!rule) rule = matchedRules.find(r => r.fuel === "" || r.fuel === "all" || r.fuel === "所有");
+            let rule = matchedRules.find(r => r.fuel.includes(targetKey)) || matchedRules[0];
             if (!rule) return;
 
-            // 基礎折扣（考慮黑卡 $11 門檻）
             let effectiveDiscount = rule.discount;
             if (useBlackCard && state.fuel === 'Futuro') {
                 effectiveDiscount = Math.max(11.0, rule.discount);
             }
 
-            let meterTarget = 0;
-            let currentLiters = 0;
-            let hint = "";
+            let meterTarget = 0, currentLiters = 0, hint = "";
 
-            // 修正的核心邏輯：
-            // 當有免費升級且選擇超級油時：
-            // 實付單價 = 平油牌價 - 超級油折扣 (即：平油結算，但扣減的是超級油的卡片折扣)
             if (hasUpgradeEnabled && state.fuel === 'Futuro') {
                 const payPerLiter = regularPrice - effectiveDiscount;
-                
-                // 實付 $500 購得升數
                 currentLiters = pay / payPerLiter;
-                
-                // 油錶應顯示金額 (按超級油牌價跳動)
                 meterTarget = currentLiters * superPrice;
-                hint = `(免費升級：平油牌價 $${regularPrice} - 超級油折扣 $${effectiveDiscount})`;
+                hint = `(免費升級：平油牌價 $${regularPrice} - 折扣 $${effectiveDiscount})`;
             } else {
-                // 一般模式
-                const payPerLiter = cardPrice - effectiveDiscount;
+                const payPerLiter = currentCardPrice - effectiveDiscount;
                 currentLiters = pay / payPerLiter;
-                meterTarget = currentLiters * cardPrice;
+                meterTarget = currentLiters * currentCardPrice;
                 hint = `(支付單價 $${payPerLiter.toFixed(2)})`;
             }
 
-            // 處理「500送60」油卷
             let couponLiters = 0;
-            const couponCount = Math.floor(pay / 500);
-            if (useCoupon && couponCount > 0) {
-                const bonusValue = couponCount * 60;
-                // 贈送部分在升級模式下通常也是按牌價差換算
-                if (hasUpgradeEnabled && state.fuel === 'Futuro') {
-                    couponLiters = bonusValue / regularPrice;
-                } else {
-                    couponLiters = bonusValue / cardPrice;
-                }
+            if (useCoupon && pay >= 500) {
+                const bonusValue = Math.floor(pay / 500) * 60;
+                const divisor = (hasUpgradeEnabled && state.fuel === 'Futuro') ? regularPrice : currentCardPrice;
+                couponLiters = bonusValue / divisor;
                 document.getElementById('row-coupon-extra').classList.remove('hidden');
                 document.getElementById('liters-coupon').innerText = `+${couponLiters.toFixed(3)} L`;
             } else {
@@ -331,37 +310,22 @@
             }
 
             const totalLiters = currentLiters + couponLiters;
-
-            // 渲染顯示
-            if (meterTarget < 300 && !useBlackCard) {
-                const basePriceForMin = (hasUpgradeEnabled && state.fuel === 'Futuro') ? regularPrice : cardPrice;
-                currentLiters = pay / (basePriceForMin - 5.0);
-                meterTarget = currentLiters * cardPrice;
-                document.getElementById('res-promo-long').innerHTML = `<span class="text-red-600 font-bold">⚠️ 未滿 $300 只享 $5 基本直減</span>`;
-            } else {
-                let promoText = `已應用：${selectedStation} | 折扣 $${effectiveDiscount} | ${rule.pts}倍積分`;
-                if (hasUpgradeEnabled) promoText += " | 免費升級生效";
-                if (useBlackCard) promoText += " | 黑卡優待";
-                document.getElementById('res-promo-long').innerText = promoText;
-            }
-
-            const directPrice = pay / totalLiters;
             const points = Math.floor(pay * rule.pts);
             const extraLitersFromPoints = (points / 12000) * (200 / regularPrice);
-            const withPointsPrice = pay / (totalLiters + extraLitersFromPoints);
 
             document.getElementById('res-meter').innerText = `$${meterTarget.toFixed(2)}`;
-            document.getElementById('res-direct').innerText = `$${directPrice.toFixed(3)}`;
-            document.getElementById('res-points').innerText = `$${withPointsPrice.toFixed(3)}`;
+            document.getElementById('res-direct').innerText = `$${(pay / totalLiters).toFixed(3)}`;
+            document.getElementById('res-points').innerText = `$${(pay / (totalLiters + extraLitersFromPoints)).toFixed(3)}`;
             document.getElementById('res-liters').innerText = `${totalLiters.toFixed(3)} L`;
             document.getElementById('liters-paid').innerText = `${currentLiters.toFixed(3)} L`;
             document.getElementById('res-extra').innerText = `${extraLitersFromPoints.toFixed(3)} L`;
             document.getElementById('res-pts').innerText = `${points.toLocaleString()} pts`;
             document.getElementById('res-promo-short').innerText = `${selectedStation} (星期${"一二三四五六日"[state.day-1]})`;
             document.getElementById('meter-logic-hint').innerText = hint;
+            document.getElementById('res-promo-long').innerText = `已應用：${selectedStation} | 折扣 $${effectiveDiscount} | ${rule.pts}倍積分 ${hasUpgradeEnabled ? '| 免費升級' : ''}`;
         }
 
-        init();
+        window.onload = init;
     </script>
 </body>
 </html>
